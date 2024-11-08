@@ -157,8 +157,6 @@ public class BigNumber {
         }
     }
 
-
-    
     public BigNumber leftShift() {
         BigNumber result = new BigNumber(this); 
         return sum(result, result); 
@@ -188,33 +186,152 @@ public class BigNumber {
         return new BigNumber(newNum, newLen, resultSign); 
     }
 
+    public BigNumber multiply(BigNumber number2) {
+        BigNumber larger, smaller;
+
+        if (isGreater(this, number2)) {
+            larger = this;
+            smaller = number2;
+        } else {
+            larger = number2;
+            smaller = this;
+        }
+
+        int[] multiplicationRes = new int[larger.length + smaller.length];
+        
+        for (int i = 0; i < smaller.length; i++) {
+            int carry = 0;
+
+            for (int j = 0; j < larger.length; j++) {
+                int res = multiplicationRes[i + j] + (smaller.num[i] * larger.num[j]) + carry;
+                carry = res / 10; 
+                multiplicationRes[i + j] = res % 10; 
+            }
+
+            multiplicationRes[i + larger.length] += carry;
+        }
+
+        int resultLen = multiplicationRes.length;
+        while (resultLen > 1 && multiplicationRes[resultLen - 1] == 0) {
+            resultLen--;
+        }
+
+        boolean resSign = this.sign != number2.sign;
+
+        return new BigNumber(multiplicationRes, resultLen, resSign);
+    }
+
+    public static BigNumber fact(int n) {
+        if (n < 0) {
+            throw new IllegalArgumentException("Factorial is not defined for negative numbers.");
+        }
+        
+        BigNumber result = new BigNumber(1); 
+
+        for (int i = 2; i <= n; i++) {
+            result = result.multiply(new BigNumber(i)); 
+        }
+
+        return result;
+    }
+
+    public BigNumber karatsuba(BigNumber number2) {
+        if (this.length == 1 && this.num[0] == 0 || number2.length == 1 && number2.num[0] == 0) {
+            return new BigNumber(0);
+        }
+
+        if (this.length == 1 && number2.length == 1) {
+            return new BigNumber(this.num[0] * number2.num[0]);
+        }
+
+        int maxLength = Math.max(this.length, number2.length);
+        int halfLength = (maxLength + 1) / 2; 
+
+        BigNumber x0 = new BigNumber(Arrays.copyOf(this.num, Math.min(this.length, halfLength)), Math.min(this.length, halfLength), this.sign);
+        BigNumber x1 = this.length > halfLength ?
+            new BigNumber(Arrays.copyOfRange(this.num, halfLength, this.length), this.length - halfLength, this.sign) : 
+            new BigNumber(0); 
+
+        BigNumber y0 = new BigNumber(Arrays.copyOf(number2.num, Math.min(number2.length, halfLength)), Math.min(number2.length, halfLength), number2.sign);
+        BigNumber y1 = number2.length > halfLength ?
+            new BigNumber(Arrays.copyOfRange(number2.num, halfLength, number2.length), number2.length - halfLength, number2.sign) : 
+            new BigNumber(0); 
+
+        BigNumber z0 = x0.karatsuba(y0); 
+        BigNumber z1 = x1.karatsuba(y1); 
+        BigNumber z2 = BigNumber.sum(x0, x1).karatsuba(BigNumber.sum(y0, y1)).subtract(z0).subtract(z1);
+
+        BigNumber shiftedZ1 = z1.multiply(new BigNumber((int) Math.pow(10, 2 * (this.length - halfLength))));
+        BigNumber shiftedZ2 = z2.multiply(new BigNumber((int) Math.pow(10, this.length - halfLength)));
+        BigNumber result = BigNumber.sum(shiftedZ1, BigNumber.sum(shiftedZ2, z0));
+
+        result.sign = this.sign != number2.sign;
+
+        return result;
+}
+
+
+    public BigNumber divide(BigNumber divisor) {
+        int quotient = 0;
+        BigNumber n = new BigNumber(this);
+        while (isGreater(n, divisor)){
+            n = n.subtract(divisor);
+            quotient++;
+        }
+        return new BigNumber(quotient);
+    }
+
+    public BigNumber power(int exponent) {
+        if (exponent < 0) {
+            throw new IllegalArgumentException("Exponent must be a non-negative integer.");
+        }
+        if (exponent == 0) {
+            return new BigNumber(1); 
+        }
+
+        BigNumber result = new BigNumber(1); 
+        BigNumber base = new BigNumber(this); 
+
+        for (int i = 0; i < exponent; i++) {
+            result = result.multiply(base); 
+        }
+
+        if (this.sign && exponent % 2 == 1) {
+            result.sign = true; 
+        }
+
+        return result;
+    }
 
     public static void main(String[] args) {
-        BigNumber num1 = new BigNumber(-100);
-        BigNumber num2 = new BigNumber("50");
-        BigNumber num3 = BigNumber.sum(num1, num2);
+        BigNumber num1 = new BigNumber(33);
+        BigNumber num2 = new BigNumber(89);
 
-        System.out.print("num1:");
-        num1.printNumber();
-        System.out.print("num2:");
-        num2.printNumber();
-        System.out.print("num3:");
-        num3.printNumber();
+        System.out.print("num1: ");
+        num1.printNumber(); 
+        System.out.print("num2: ");
+        num2.printNumber(); 
 
-        BigNumber num4 = num3.subtract(num2);
-        System.out.print("num4:");
-        num4.printNumber();
+        BigNumber multiplyResult = num1.multiply(num2);
+        System.out.print("Multiplication: ");
+        multiplyResult.printNumber(); 
 
-        BigNumber num5 = new BigNumber(568);
-        System.out.print("num5:");
-        num5.printNumber(); 
+        BigNumber divideResult = num1.divide(new BigNumber(123));
+        System.out.print("Division: ");
+        divideResult.printNumber(); 
 
-        BigNumber shiftedLeft = num5.leftShift();
-        System.out.print("num5 shifted left:");
-        shiftedLeft.printNumber(); 
+        BigNumber factorialResult = BigNumber.fact(10);
+        System.out.print("Factorial of 10: ");
+        factorialResult.printNumber();
 
-        BigNumber shiftedRight = num5.rightShift();
-        System.out.print("num5 shifted right:");
-        shiftedRight.printNumber(); 
+        BigNumber powerResult = num1.power(2);
+        System.out.print("Power (num1^3): ");
+        powerResult.printNumber(); 
+
+        BigNumber karatsubaResult = num1.karatsuba(num2);
+        System.out.print("Karatsuba Multiplication: ");
+        karatsubaResult.printNumber(); 
+
     }
+
 }
