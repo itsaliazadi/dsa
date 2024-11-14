@@ -68,6 +68,20 @@ public class BigNumber {
         System.out.println();
     }
 
+    private static boolean equals(BigNumber number1, BigNumber number2){
+        if (number1.length != number2.length) {
+            return false;
+        }
+        else{
+            for (int i = 0; i < number1.length; i++){
+                if (number1.num[i] != number2.num[i]){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     private static boolean isGreater(BigNumber number1, BigNumber number2) {
         if (number1.length != number2.length) {
             return number1.length > number2.length;
@@ -80,6 +94,8 @@ public class BigNumber {
         }
         return false;
     }
+
+
 
     public static BigNumber sum(BigNumber number1, BigNumber number2) {
         int maxLen = Math.max(number1.length, number2.length);
@@ -229,83 +245,117 @@ public class BigNumber {
         BigNumber result = new BigNumber(1); 
 
         for (int i = 2; i <= n; i++) {
-            result = result.multiply(new BigNumber(i)); 
+            result = result.karatsuba(new BigNumber(i)); 
         }
 
         return result;
     }
 
-    public BigNumber karatsuba(BigNumber number2) {
-        if (this.length == 1 && this.num[0] == 0 || number2.length == 1 && number2.num[0] == 0) {
-            return new BigNumber(0);
-        }
+   public BigNumber karatsuba(BigNumber number2) {
 
-        if (this.length == 1 && number2.length == 1) {
-            return new BigNumber(this.num[0] * number2.num[0]);
+        if (this.length < 10 || number2.length < 10) {
+            return this.multiply(number2);
         }
 
         int maxLength = Math.max(this.length, number2.length);
-        int halfLength = (maxLength + 1) / 2; 
+        int mid = maxLength / 2;
 
-        BigNumber x0 = new BigNumber(Arrays.copyOf(this.num, Math.min(this.length, halfLength)), Math.min(this.length, halfLength), this.sign);
-        BigNumber x1 = this.length > halfLength ?
-            new BigNumber(Arrays.copyOfRange(this.num, halfLength, this.length), this.length - halfLength, this.sign) : 
-            new BigNumber(0); 
+        BigNumber a1 = splitHigh(mid);
+        BigNumber a0 = splitLow(mid);  
+        BigNumber b1 = number2.splitHigh(mid);  
+        BigNumber b0 = number2.splitLow(mid);  
 
-        BigNumber y0 = new BigNumber(Arrays.copyOf(number2.num, Math.min(number2.length, halfLength)), Math.min(number2.length, halfLength), number2.sign);
-        BigNumber y1 = number2.length > halfLength ?
-            new BigNumber(Arrays.copyOfRange(number2.num, halfLength, number2.length), number2.length - halfLength, number2.sign) : 
-            new BigNumber(0); 
+        BigNumber z2 = a1.karatsuba(b1); 
+        BigNumber z0 = a0.karatsuba(b0);  
+        
+        BigNumber sumA = BigNumber.sum(a1, a0);
+        BigNumber sumB = BigNumber.sum(b1, b0);
+        BigNumber z1 = sumA.karatsuba(sumB).subtract(z2).subtract(z0);
 
-        BigNumber z0 = x0.karatsuba(y0); 
-        BigNumber z1 = x1.karatsuba(y1); 
-        BigNumber z2 = BigNumber.sum(x0, x1).karatsuba(BigNumber.sum(y0, y1)).subtract(z0).subtract(z1);
-
-        BigNumber shiftedZ1 = z1.multiply(new BigNumber((int) Math.pow(10, 2 * (this.length - halfLength))));
-        BigNumber shiftedZ2 = z2.multiply(new BigNumber((int) Math.pow(10, this.length - halfLength)));
-        BigNumber result = BigNumber.sum(shiftedZ1, BigNumber.sum(shiftedZ2, z0));
+        BigNumber result = shiftLeft(z0, 2 * mid);
+        result = BigNumber.sum(result, shiftLeft(z1, mid));
+        result = BigNumber.sum(result, z2);
 
         result.sign = this.sign != number2.sign;
-
+        
         return result;
 }
 
+    private BigNumber splitHigh(int mid) {
+        if (this.length <= mid) {
+            return new BigNumber();
+        }
+        
+        int newLength = this.length - mid;
+        int[] newNum = new int[newLength];
+        System.arraycopy(this.num, mid, newNum, 0, newLength);
+        
+        return new BigNumber(newNum, newLength, false);
+    }
+
+    private BigNumber splitLow(int mid) {
+        int newLength = Math.min(mid, this.length);
+        int[] newNum = new int[newLength];
+        System.arraycopy(this.num, 0, newNum, 0, newLength);
+        
+        return new BigNumber(newNum, newLength, false);
+    }
+
+    private static BigNumber shiftLeft(BigNumber num, int shift) {
+        if (num.length == 1 && num.num[0] == 0) {
+            return new BigNumber();
+        }
+        
+        int[] newNum = new int[num.length + shift];
+        System.arraycopy(num.num, 0, newNum, shift, num.length);
+        
+        return new BigNumber(newNum, newNum.length, num.sign);
+    }
+
 
     public BigNumber divide(BigNumber divisor) {
-        int quotient = 0;
-        BigNumber n = new BigNumber(this);
-        while (isGreater(n, divisor)){
-            n = n.subtract(divisor);
-            quotient++;
+
+        boolean quotientSign = this.sign != divisor.sign;
+
+        BigNumber copyA = new BigNumber(this);
+        copyA.sign = false;
+
+        BigNumber copyB = new BigNumber(divisor);
+        copyB.sign = false;
+
+        int q = 0;
+        while (isGreater(copyA, copyB) || equals(copyA, copyB)){
+            copyA = copyA.subtract(copyB);
+            q++;
         }
+
+        BigNumber quotient = new BigNumber(q);
+        quotient.sign = quotientSign;
+
         return new BigNumber(quotient);
     }
 
-    public BigNumber power(int exponent) {
-        if (exponent < 0) {
-            throw new IllegalArgumentException("Exponent must be a non-negative integer.");
-        }
-        if (exponent == 0) {
+    public BigNumber power(int n) {
+        if (n == 0) {
             return new BigNumber(1); 
         }
-
-        BigNumber result = new BigNumber(1); 
-        BigNumber base = new BigNumber(this); 
-
-        for (int i = 0; i < exponent; i++) {
-            result = result.multiply(base); 
+        if (n == 1) {
+            return new BigNumber(this); 
         }
 
-        if (this.sign && exponent % 2 == 1) {
-            result.sign = true; 
+        BigNumber half_power = this.power(n / 2);
+        half_power = half_power.karatsuba(half_power);
+
+        if (n % 2 == 1) {
+            half_power = half_power.karatsuba(this); 
         }
 
-        return result;
+        return half_power;
     }
 
     public static void main(String[] args) {
-        BigNumber num1 = new BigNumber(33);
-        BigNumber num2 = new BigNumber(89);
+        BigNumber num1 = new BigNumber("-987654321");
+        BigNumber num2 = new BigNumber("12344444");
 
         System.out.print("num1: ");
         num1.printNumber(); 
@@ -316,16 +366,16 @@ public class BigNumber {
         System.out.print("Multiplication: ");
         multiplyResult.printNumber(); 
 
-        BigNumber divideResult = num1.divide(new BigNumber(123));
+        BigNumber divideResult = num1.divide(num2);
         System.out.print("Division: ");
         divideResult.printNumber(); 
 
-        BigNumber factorialResult = BigNumber.fact(10);
-        System.out.print("Factorial of 10: ");
+        BigNumber factorialResult = BigNumber.fact(100);
+        System.out.print("Factorial of 100: ");
         factorialResult.printNumber();
 
-        BigNumber powerResult = num1.power(2);
-        System.out.print("Power (num1^3): ");
+        BigNumber powerResult = num1.power(5);
+        System.out.print("Power (num1^5): ");
         powerResult.printNumber(); 
 
         BigNumber karatsubaResult = num1.karatsuba(num2);
